@@ -110,3 +110,49 @@ class LoginTests(APITestCase):
             self.refresh_url, {'refresh': 'not-a-token'}, format='json'
         )
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+class ProfileTests(APITestCase):
+    def setUp(self):
+        self.url = reverse('me')
+        self.user = User.objects.create_user(
+            email='user@example.com',
+            password='StrongPass123!',
+            first_name='Іван',
+            last_name='Петренко',
+            role='tenant',
+        )
+
+    def test_requires_authentication(self):
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_get_profile(self):
+        self.client.force_authenticate(self.user)
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['email'], 'user@example.com')
+        self.assertNotIn('password', response.data)
+
+    def test_patch_profile(self):
+        self.client.force_authenticate(self.user)
+        response = self.client.patch(
+            self.url, {'first_name': 'Петро', 'phone': '+380501234567'}, format='json'
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.first_name, 'Петро')
+        self.assertEqual(self.user.phone, '+380501234567')
+
+    def test_cannot_change_role_or_email(self):
+        self.client.force_authenticate(self.user)
+        self.client.patch(
+            self.url, {'role': 'owner', 'email': 'new@example.com'}, format='json'
+        )
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.role, 'tenant')
+        self.assertEqual(self.user.email, 'user@example.com')
+
+    def test_put_not_allowed(self):
+        self.client.force_authenticate(self.user)
+        response = self.client.put(self.url, {}, format='json')
+        self.assertEqual(response.status_code, status.HTTP_405_METHOD_NOT_ALLOWED)

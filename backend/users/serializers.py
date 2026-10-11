@@ -33,7 +33,6 @@ class RegisterSerializer(serializers.ModelSerializer):
         if attrs['password'] != attrs['password2']:
             raise serializers.ValidationError({'password2': 'Паролі не збігаються.'})
 
-        # Передаємо тимчасового користувача, щоб спрацював перевірник схожості пароля на email/ім'я
         user = User(
             email=attrs.get('email'),
             first_name=attrs.get('first_name', ''),
@@ -65,3 +64,16 @@ class LoginSerializer(TokenObtainPairSerializer):
             'role': self.user.role,
         }
         return data
+
+class UserProfileSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = (
+            'id',
+            'email',
+            'first_name',
+            'last_name',
+            'phone',
+            'role',
+        )
+        read_only_fields = ('id', 'email', 'role')
