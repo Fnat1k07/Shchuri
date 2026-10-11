@@ -50,3 +50,63 @@ class RegisterTests(APITestCase):
         self.client.post(self.url, self.data, format='json')
         user = User.objects.get(email='owner@example.com')
         self.assertFalse(user.is_staff)
+
+class LoginTests(APITestCase):
+    def setUp(self):
+        self.login_url = reverse('login')
+        self.refresh_url = reverse('token_refresh')
+        self.user = User.objects.create_user(
+            email='user@example.com',
+            password='StrongPass123!',
+            first_name='Іван',
+            last_name='Петренко',
+            role='tenant',
+        )
+
+    def test_login_success(self):
+        response = self.client.post(
+            self.login_url,
+            {'email': 'user@example.com', 'password': 'StrongPass123!'},
+            format='json',
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn('access', response.data)
+        self.assertIn('refresh', response.data)
+        self.assertEqual(response.data['user']['email'], 'user@example.com')
+        self.assertEqual(response.data['user']['role'], 'tenant')
+
+    def test_login_wrong_password(self):
+        response = self.client.post(
+            self.login_url,
+            {'email': 'user@example.com', 'password': 'wrong'},
+            format='json',
+        )
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_login_unknown_email(self):
+        response = self.client.post(
+            self.login_url,
+            {'email': 'nobody@example.com', 'password': 'StrongPass123!'},
+            format='json',
+        )
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_refresh_token(self):
+        login = self.client.post(
+            self.login_url,
+            {'email': 'user@example.com', 'password': 'StrongPass123!'},
+            format='json',
+        )
+        response = self.client.post(
+            self.refresh_url,
+            {'refresh': login.data['refresh']},
+            format='json',
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn('access', response.data)
+
+    def test_refresh_invalid_token(self):
+        response = self.client.post(
+            self.refresh_url, {'refresh': 'not-a-token'}, format='json'
+        )
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
