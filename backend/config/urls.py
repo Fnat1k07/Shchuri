@@ -35,4 +35,5 @@ urlpatterns = [
 
     path('api/auth/', include('users.urls')),
     path('api/users/me/', MeView.as_view(), name='me'),
+    path('api/', include('listings.urls'))
 ]
