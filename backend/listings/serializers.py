@@ -1,6 +1,9 @@
 from rest_framework import serializers
 
-from .models import Amenity, Listing
+from .models import Amenity, Listing, ListingImage
+
+MAX_IMAGE_SIZE = 5 * 1024 * 1024
+ALLOWED_IMAGE_FORMATS = {'JPEG', 'PNG', 'WEBP'}
 
 
 ALLOWED_TRANSITIONS = {
@@ -10,18 +13,41 @@ ALLOWED_TRANSITIONS = {
     Listing.Status.ARCHIVED: {Listing.Status.DRAFT},
 }
 
+class AmenitySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Amenity
+        fields = ('id', 'name')
+
+class ListingImageSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ListingImage
+        fields = ('id', 'image', 'is_cover', 'created_at')
+        read_only_fields = ('id', 'is_cover', 'created_at')
+
+    def validate_image(self, value):
+        if value.size > MAX_IMAGE_SIZE:
+            raise serializers.ValidationError(
+                f'Файл завеликий. Максимум {MAX_IMAGE_SIZE // (1024 * 1024)} МБ.'
+            )
+        fmt = getattr(getattr(value, 'image', None), 'format', None)
+        if fmt not in ALLOWED_IMAGE_FORMATS:
+            raise serializers.ValidationError(
+                'Дозволені формати: JPEG, PNG, WEBP.'
+            )
+        return value
 
 class ListingSerializer(serializers.ModelSerializer):
     amenities = serializers.PrimaryKeyRelatedField(
         many=True, queryset=Amenity.objects.all(), required=False
     )
+    images = ListingImageSerializer(many=True, read_only=True)
 
     class Meta:
         model = Listing
         fields = (
             'id', 'owner', 'title', 'description', 'price', 'property_type',
             'rooms', 'area', 'city', 'district', 'address',
-            'latitude', 'longitude', 'amenities', 'status',
+            'latitude', 'longitude', 'amenities', 'images', 'status',
             'views_count', 'created_at', 'updated_at',
         )
         read_only_fields = ('id', 'owner', 'views_count', 'created_at', 'updated_at')
