@@ -1,9 +1,18 @@
+import shutil
+import tempfile
+from io import BytesIO
+from unittest.mock import patch
+
+from django.core.files.uploadedfile import SimpleUploadedFile
+from django.test import override_settings
+from PIL import Image
+
+from .models import Amenity, Listing, ListingImage
 from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
 
 from users.models import User
-from .models import Listing
 
 
 def make_listing(owner, **kwargs):
@@ -153,3 +162,127 @@ class ListingApiTests(APITestCase):
     def test_mine_requires_authentication(self):
         response = self.client.get(self.mine_url)
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+def make_image(name='photo.png', fmt='PNG'):
+    buf = BytesIO()
+    Image.new('RGB', (20, 20), 'red').save(buf, format=fmt)
+    return SimpleUploadedFile(name, buf.getvalue())
+
+
+TEMP_MEDIA = tempfile.mkdtemp()
+
+
+@override_settings(MEDIA_ROOT=TEMP_MEDIA)
+class ListingImageTests(APITestCase):
+    @classmethod
+    def tearDownClass(cls):
+        shutil.rmtree(TEMP_MEDIA, ignore_errors=True)
+        super().tearDownClass()
+
+    def setUp(self):
+        self.owner = User.objects.create_user(
+            'owner@example.com', 'Pass12345!', first_name='О', last_name='В', role='owner')
+        self.other = User.objects.create_user(
+            'other@example.com', 'Pass12345!', first_name='І', last_name='Н', role='owner')
+        self.tenant = User.objects.create_user(
+            'tenant@example.com', 'Pass12345!', first_name='Т', last_name='Н', role='tenant')
+        self.listing = make_listing(self.owner, status='published')
+        self.upload_url = reverse('listing-upload-image', args=[self.listing.pk])
+
+    def upload(self, **kwargs):
+        return self.client.post(
+            self.upload_url, {'image': make_image(**kwargs)}, format='multipart')
+
+    def test_first_image_becomes_cover(self):
+        self.client.force_authenticate(self.owner)
+        r1 = self.upload(name='a.png')
+        r2 = self.upload(name='b.png')
+        self.assertEqual(r1.status_code, status.HTTP_201_CREATED)
+        self.assertTrue(r1.data['is_cover'])
+        self.assertFalse(r2.data['is_cover'])
+
+    def test_max_8_images(self):
+        self.client.force_authenticate(self.owner)
+        for i in range(8):
+            self.assertEqual(self.upload(name=f'{i}.png').status_code, 201)
+        response = self.upload(name='9.png')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(self.listing.images.count(), 8)
+
+    def test_invalid_format_rejected(self):
+        self.client.force_authenticate(self.owner)
+        response = self.upload(name='a.gif', fmt='GIF')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_not_an_image_rejected(self):
+        self.client.force_authenticate(self.owner)
+        fake = SimpleUploadedFile('a.png', b'this is not an image')
+        response = self.client.post(self.upload_url, {'image': fake}, format='multipart')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_too_large_rejected(self):
+        self.client.force_authenticate(self.owner)
+        with patch('listings.serializers.MAX_IMAGE_SIZE', 10):
+            response = self.upload()
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_guest_cannot_upload(self):
+        self.assertEqual(self.upload().status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_tenant_cannot_upload(self):
+        self.client.force_authenticate(self.tenant)
+        self.assertEqual(self.upload().status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_other_owner_cannot_upload(self):
+        self.client.force_authenticate(self.other)
+        self.assertEqual(self.upload().status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_delete_image(self):
+        self.client.force_authenticate(self.owner)
+        image_id = self.upload().data['id']
+        url = reverse('listing-delete-image', kwargs={'pk': self.listing.pk, 'image_id': image_id})
+        response = self.client.delete(url)
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertEqual(self.listing.images.count(), 0)
+
+    def test_other_owner_cannot_delete_image(self):
+        self.client.force_authenticate(self.owner)
+        image_id = self.upload().data['id']
+        self.client.force_authenticate(self.other)
+        url = reverse('listing-delete-image', kwargs={'pk': self.listing.pk, 'image_id': image_id})
+        self.assertEqual(self.client.delete(url).status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_deleting_cover_promotes_next_image(self):
+        self.client.force_authenticate(self.owner)
+        cover_id = self.upload(name='a.png').data['id']
+        second_id = self.upload(name='b.png').data['id']
+        url = reverse('listing-delete-image', kwargs={'pk': self.listing.pk, 'image_id': cover_id})
+        self.client.delete(url)
+        self.assertTrue(ListingImage.objects.get(pk=second_id).is_cover)
+
+    def test_set_cover(self):
+        self.client.force_authenticate(self.owner)
+        first_id = self.upload(name='a.png').data['id']
+        second_id = self.upload(name='b.png').data['id']
+        url = reverse('listing-set-cover', kwargs={'pk': self.listing.pk, 'image_id': second_id})
+        response = self.client.post(url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertFalse(ListingImage.objects.get(pk=first_id).is_cover)
+        self.assertTrue(ListingImage.objects.get(pk=second_id).is_cover)
+        self.assertEqual(self.listing.images.filter(is_cover=True).count(), 1)
+
+    def test_listing_detail_includes_images(self):
+        self.client.force_authenticate(self.owner)
+        self.upload()
+        response = self.client.get(reverse('listing-detail', args=[self.listing.pk]))
+        self.assertEqual(len(response.data['images']), 1)
+
+
+class AmenityApiTests(APITestCase):
+    def test_amenities_list_is_public(self):
+        Amenity.objects.create(name='Wi-Fi')
+        Amenity.objects.create(name='Паркінг')
+        response = self.client.get(reverse('amenity-list'))
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        names = sorted(a['name'] for a in items(response))
+        self.assertEqual(names, ['Wi-Fi', 'Паркінг'])
