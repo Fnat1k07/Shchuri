@@ -169,6 +169,32 @@ def make_image(name='photo.png', fmt='PNG'):
     return SimpleUploadedFile(name, buf.getvalue())
 
 
+def test_title_too_short(self):
+        self.client.force_authenticate(self.owner)
+        response = self.client.post(
+            self.list_url, {**self.payload, 'title': 'abc'}, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+def test_price_too_high(self):
+        self.client.force_authenticate(self.owner)
+        response = self.client.post(
+            self.list_url, {**self.payload, 'price': '5000000'}, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+def test_rooms_too_many(self):
+        self.client.force_authenticate(self.owner)
+        response = self.client.post(
+            self.list_url, {**self.payload, 'rooms': 50}, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+def test_required_fields_missing(self):
+        self.client.force_authenticate(self.owner)
+        response = self.client.post(self.list_url, {'title': 'Квартира тест'}, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        for field in ('description', 'price', 'city', 'address'):
+            self.assertIn(field, response.data)
+
+            
 TEMP_MEDIA = tempfile.mkdtemp()
 
 
