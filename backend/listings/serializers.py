@@ -52,6 +52,26 @@ class ListingSerializer(serializers.ModelSerializer):
         )
         read_only_fields = ('id', 'owner', 'views_count', 'created_at', 'updated_at')
 
+    def validate_title(self, value):
+        if len(value.strip()) < 5:
+            raise serializers.ValidationError('Назва має містити щонайменше 5 символів.')
+        return value
+
+    def validate_price(self, value):
+        if value > 1_000_000:
+            raise serializers.ValidationError('Ціна не може перевищувати 1 000 000.')
+        return value
+
+    def validate_rooms(self, value):
+        if value > 20:
+            raise serializers.ValidationError('Кількість кімнат не може перевищувати 20.')
+        return value
+
+    def validate_area(self, value):
+        if value > 10000:
+            raise serializers.ValidationError('Площа не може перевищувати 10 000 м².')
+        return value
+    
     def validate_status(self, value):
         if self.instance is None:
             if value not in (Listing.Status.DRAFT, Listing.Status.PENDING):
