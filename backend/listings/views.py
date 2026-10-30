@@ -39,19 +39,30 @@ class ListingViewSet(viewsets.ModelViewSet):
         serializer.save(owner=self.request.user)
 
     @action(detail=False, methods=['get'],
-            permission_classes=[permissions.IsAuthenticated])
+            permission_classes=[permissions.IsAuthenticated])    
     def mine(self, request):
         qs = (
             Listing.objects.filter(owner=request.user)
             .select_related('owner')
             .prefetch_related('amenities', 'images')
         )
-        return Response(self.get_serializer(qs, many=True).data)
 
+        status_param = request.query_params.get('status')
+        if status_param:
+            if status_param not in Listing.Status.values:
+                allowed = ', '.join(Listing.Status.values)
+                return Response(
+                    {'status': [f'Допустимі значення: {allowed}.']},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            qs = qs.filter(status=status_param)
+
+        return Response(self.get_serializer(qs, many=True).data)
+    
     @action(detail=True, methods=['post'], url_path='images',
             parser_classes=[MultiPartParser, FormParser])
     def upload_image(self, request, pk=None):
-        listing = self.get_object()  # перевіряє, що це власник
+        listing = self.get_object()
 
         if listing.images.count() >= MAX_IMAGES:
             return Response(

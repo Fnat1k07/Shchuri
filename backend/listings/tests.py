@@ -162,37 +162,69 @@ class ListingApiTests(APITestCase):
     def test_mine_requires_authentication(self):
         response = self.client.get(self.mine_url)
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
-
-def make_image(name='photo.png', fmt='PNG'):
-    buf = BytesIO()
-    Image.new('RGB', (20, 20), 'red').save(buf, format=fmt)
-    return SimpleUploadedFile(name, buf.getvalue())
-
-
-def test_title_too_short(self):
+        
+    def test_title_too_short(self):
         self.client.force_authenticate(self.owner)
         response = self.client.post(
             self.list_url, {**self.payload, 'title': 'abc'}, format='json')
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
-def test_price_too_high(self):
+    def test_price_too_high(self):
         self.client.force_authenticate(self.owner)
         response = self.client.post(
             self.list_url, {**self.payload, 'price': '5000000'}, format='json')
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
-def test_rooms_too_many(self):
+    def test_rooms_too_many(self):
         self.client.force_authenticate(self.owner)
         response = self.client.post(
             self.list_url, {**self.payload, 'rooms': 50}, format='json')
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
-def test_required_fields_missing(self):
+    def test_required_fields_missing(self):
         self.client.force_authenticate(self.owner)
         response = self.client.post(self.list_url, {'title': 'Квартира тест'}, format='json')
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         for field in ('description', 'price', 'city', 'address'):
             self.assertIn(field, response.data)
+
+    def test_mine_filter_by_status(self):
+        make_listing(self.owner, status='draft', title='Draft one')
+        make_listing(self.owner, status='published', title='Pub one')
+        self.client.force_authenticate(self.owner)
+        response = self.client.get(self.mine_url, {'status': 'draft'})
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual([i['title'] for i in items(response)], ['Draft one'])
+
+    def test_mine_invalid_status_filter(self):
+        self.client.force_authenticate(self.owner)
+        response = self.client.get(self.mine_url, {'status': 'nonsense'})
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_owner_archives_listing(self):
+        listing = make_listing(self.owner, status='published', title='To archive')
+        self.client.force_authenticate(self.owner)
+        response = self.client.patch(
+            reverse('listing-detail', args=[listing.pk]), {'status': 'archived'}, format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        mine = self.client.get(self.mine_url, {'status': 'archived'})
+        self.assertEqual([i['title'] for i in items(mine)], ['To archive'])
+
+        self.client.force_authenticate(None)
+        public = self.client.get(self.list_url)
+        self.assertEqual(items(public), [])
+
+    def test_mine_includes_images_field(self):
+        make_listing(self.owner)
+        self.client.force_authenticate(self.owner)
+        response = self.client.get(self.mine_url)
+        self.assertIn('images', items(response)[0])
+
+def make_image(name='photo.png', fmt='PNG'):
+    buf = BytesIO()
+    Image.new('RGB', (20, 20), 'red').save(buf, format=fmt)
+    return SimpleUploadedFile(name, buf.getvalue())
 
             
 TEMP_MEDIA = tempfile.mkdtemp()
