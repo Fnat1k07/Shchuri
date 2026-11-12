@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import api from "../api/axios";
+import "./Register.css";
 
 function Register() {
   const navigate = useNavigate();
@@ -58,98 +59,137 @@ function Register() {
   };
 
   return (
-    <div>
-      <h1>Реєстрація в HomeRent</h1>
-
-      <form onSubmit={handleSubmit}>
-        <div>
-          <label>Ім'я:</label>
-          <input
-            type="text"
-            name="first_name"
-            value={form.first_name}
-            onChange={handleChange}
-            required
-          />
+    <main className="register-page">
+      <div className="register-card">
+        <div className="register-heading">
+          <span className="register-label">HOMERENT</span>
+          <h1>Створити акаунт</h1>
+          <p>
+            Приєднуйтесь до HomeRent та знаходьте житло
+            або здавайте власну нерухомість.
+          </p>
         </div>
 
-        <div>
-          <label>Прізвище:</label>
-          <input
-            type="text"
-            name="last_name"
-            value={form.last_name}
-            onChange={handleChange}
-            required
-          />
-        </div>
+        <form className="register-form" onSubmit={handleSubmit}>
+          <div className="register-fields">
+            <div className="register-field">
+              <label htmlFor="first_name">Ім'я</label>
+              <input
+                id="first_name"
+                type="text"
+                name="first_name"
+                placeholder="Ваше ім'я"
+                value={form.first_name}
+                onChange={handleChange}
+                autoComplete="given-name"
+                required
+              />
+            </div>
 
-        <div>
-          <label>Email:</label>
-          <input
-            type="email"
-            name="email"
-            value={form.email}
-            onChange={handleChange}
-            required
-          />
-        </div>
+            <div className="register-field">
+              <label htmlFor="last_name">Прізвище</label>
+              <input
+                id="last_name"
+                type="text"
+                name="last_name"
+                placeholder="Ваше прізвище"
+                value={form.last_name}
+                onChange={handleChange}
+                autoComplete="family-name"
+                required
+              />
+            </div>
 
-        <div>
-          <label>Телефон:</label>
-          <input
-            type="tel"
-            name="phone"
-            value={form.phone}
-            onChange={handleChange}
-          />
-        </div>
+            <div className="register-field register-field-full">
+              <label htmlFor="email">Email</label>
+              <input
+                id="email"
+                type="email"
+                name="email"
+                placeholder="example@email.com"
+                value={form.email}
+                onChange={handleChange}
+                autoComplete="email"
+                required
+              />
+            </div>
 
-        <div>
-          <label>Роль:</label>
-          <select
-            name="role"
-            value={form.role}
-            onChange={handleChange}
+            <div className="register-field register-field-full">
+              <label htmlFor="phone">Номер телефону</label>
+              <input
+                id="phone"
+                type="tel"
+                name="phone"
+                placeholder="+380..."
+                value={form.phone}
+                onChange={handleChange}
+                autoComplete="tel"
+              />
+            </div>
+
+            <div className="register-field register-field-full">
+              <label htmlFor="role">Тип облікового запису</label>
+              <select
+                id="role"
+                name="role"
+                value={form.role}
+                onChange={handleChange}
+              >
+                <option value="tenant">Орендар</option>
+                <option value="owner">Власник житла</option>
+              </select>
+            </div>
+
+            <div className="register-field">
+              <label htmlFor="password">Пароль</label>
+              <input
+                id="password"
+                type="password"
+                name="password"
+                placeholder="Створіть пароль"
+                value={form.password}
+                onChange={handleChange}
+                autoComplete="new-password"
+                required
+              />
+            </div>
+
+            <div className="register-field">
+              <label htmlFor="password2">Підтвердження пароля</label>
+              <input
+                id="password2"
+                type="password"
+                name="password2"
+                placeholder="Повторіть пароль"
+                value={form.password2}
+                onChange={handleChange}
+                autoComplete="new-password"
+                required
+              />
+            </div>
+          </div>
+
+          {error && (
+            <div className="register-error">
+              {error}
+            </div>
+          )}
+
+          <button
+            className="register-button"
+            type="submit"
+            disabled={loading}
           >
-            <option value="tenant">Орендар</option>
-            <option value="owner">Власник житла</option>
-          </select>
+            {loading ? "Створення акаунта..." : "Зареєструватися"}
+          </button>
+        </form>
+
+        <div className="register-footer">
+          <span>Уже маєте акаунт?</span>
+          <Link to="/login">Увійти</Link>
         </div>
-
-        <div>
-          <label>Пароль:</label>
-          <input
-            type="password"
-            name="password"
-            value={form.password}
-            onChange={handleChange}
-            required
-          />
-        </div>
-
-        <div>
-          <label>Підтвердження пароля:</label>
-          <input
-            type="password"
-            name="password2"
-            value={form.password2}
-            onChange={handleChange}
-            required
-          />
-        </div>
-
-        {error && <p style={{ color: "red" }}>{error}</p>}
-
-        <button type="submit" disabled={loading}>
-          {loading ? "Реєстрація..." : "Зареєструватися"}
-        </button>
-      </form>
-
-      <p>
-        Уже маєте акаунт? <Link to="/login">Увійти</Link>
-      </p>
-    </div>
+      </div>
+    </main>
   );
 }
 

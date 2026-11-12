@@ -2,7 +2,6 @@ import {
   BrowserRouter,
   Routes,
   Route,
-  Link
 } from "react-router-dom";
 
 import Home from "./pages/Home";
@@ -10,28 +9,37 @@ import Login from "./pages/Login";
 import Register from "./pages/Register";
 import Profile from "./pages/Profile";
 
-import ProtectedRoute from "./components/ProtectedRoute"
+import Header from "./components/Header";
+import Footer from "./components/Footer";
+import ProtectedRoute from "./components/ProtectedRoute";
 
 function App() {
   return (
     <BrowserRouter>
-      <nav>
-        <Link to="/">Головна</Link> |{" "}
-        <Link to="/login">Вхід</Link> |{" "}
-        <Link to="/register">Реєстрація</Link> |{" "}
-        <Link to="/profile">Кабінет</Link>
-      </nav>
+      <div className="app-layout">
+        <Header />
 
-      <Routes>
-        <Route path="/" element={<Home />} />
-        <Route path="/login" element={<Login />} />
-        <Route path="/register" element={<Register />} />
-        <Route path="/profile" element={
-          <ProtectedRoute>
-            <Profile />
-          </ProtectedRoute>
-          } />
-      </Routes>
+        <main className="page-content">
+          <Routes>
+            <Route path="/" element={<Home />} />
+
+            <Route path="/login" element={<Login />} />
+
+            <Route path="/register" element={<Register />} />
+
+            <Route
+              path="/profile"
+              element={
+                <ProtectedRoute>
+                  <Profile />
+                </ProtectedRoute>
+              }
+            />
+          </Routes>
+        </main>
+
+        <Footer />
+      </div>
     </BrowserRouter>
   );
 }
