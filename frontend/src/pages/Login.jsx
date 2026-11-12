@@ -1,6 +1,8 @@
+
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import "./Login.css";
 
 function Login() {
   const [email, setEmail] = useState("");
@@ -24,34 +26,59 @@ function Login() {
   };
 
   return (
-    <div>
-      <h1>Вхід у HomeRent</h1>
+    <div className="login-page">
+      <div className="login-card">
+        <div className="login-icon">⌂</div>
 
-      <form onSubmit={handleSubmit}>
-        <div>
-          <label>Email:</label>
-          <input
-            type="email"
-            value={email}
-            onChange={(event) => setEmail(event.target.value)}
-            required
-          />
+        <div className="login-heading">
+          <h1>Вхід у HomeRent</h1>
+          <p>
+            Увійдіть до свого облікового запису,
+            щоб продовжити.
+          </p>
         </div>
 
-        <div>
-          <label>Пароль:</label>
-          <input
-            type="password"
-            value={password}
-            onChange={(event) => setPassword(event.target.value)}
-            required
-          />
+        <form className="login-form" onSubmit={handleSubmit}>
+          <div className="login-form-group">
+            <label htmlFor="login-email">Email</label>
+            <input
+              id="login-email"
+              type="email"
+              placeholder="example@gmail.com"
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+              required
+            />
+          </div>
+
+          <div className="login-form-group">
+            <label htmlFor="login-password">Пароль</label>
+            <input
+              id="login-password"
+              type="password"
+              placeholder="Введіть пароль"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              required
+            />
+          </div>
+
+          {error && (
+            <div className="login-error">
+              {error}
+            </div>
+          )}
+
+          <button className="login-submit-button" type="submit">
+            Увійти
+          </button>
+        </form>
+
+        <div className="login-register-link">
+          Ще не маєте акаунта?
+          <Link to="/register"> Зареєструватися</Link>
         </div>
-
-        <button type="submit">Увійти</button>
-      </form>
-
-      {error && <p>{error}</p>}
+      </div>
     </div>
   );
 }
