@@ -12,6 +12,7 @@ import Profile from "./pages/Profile";
 import Header from "./components/Header";
 import Footer from "./components/Footer";
 import ProtectedRoute from "./components/ProtectedRoute";
+import ListingForm from "./components/ListingForm";
 
 function App() {
   return (
@@ -35,6 +36,23 @@ function App() {
                 </ProtectedRoute>
               }
             />
+            <Route
+  path="/listings/create"
+  element={
+    <ProtectedRoute>
+      <ListingForm />
+    </ProtectedRoute>
+  }
+/>
+
+<Route
+  path="/listings/:id/edit"
+  element={
+    <ProtectedRoute>
+      <ListingForm />
+    </ProtectedRoute>
+  }
+/>
           </Routes>
         </main>
 
