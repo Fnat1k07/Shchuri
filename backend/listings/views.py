@@ -5,6 +5,10 @@ from rest_framework import permissions, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.response import Response
+from rest_framework.filters import OrderingFilter, SearchFilter
+
+from .filters import apply_listing_filters
+from .pagination import ListingPagination
 
 from .models import Amenity, Listing, ListingImage
 from .permissions import IsOwnerOrReadOnly, IsOwnerRole
@@ -20,6 +24,11 @@ MAX_IMAGES = 8
 class ListingViewSet(viewsets.ModelViewSet):
     serializer_class = ListingSerializer
     permission_classes = [IsOwnerRole, IsOwnerOrReadOnly]
+    pagination_class = ListingPagination
+    filter_backends = [SearchFilter, OrderingFilter]
+    search_fields = ['title', 'description', 'city', 'district', 'address']
+    ordering_fields = ['price', 'created_at', 'area', 'rooms']
+    ordering = ['-created_at', '-id']
 
     def get_queryset(self):
         qs = Listing.objects.select_related('owner').prefetch_related(
@@ -28,7 +37,7 @@ class ListingViewSet(viewsets.ModelViewSet):
         published = Q(status=Listing.Status.PUBLISHED)
 
         if self.action == 'list':
-            return qs.filter(published)
+            return apply_listing_filters(qs.filter(published), self.request.query_params)
 
         user = self.request.user
         if user.is_authenticated:

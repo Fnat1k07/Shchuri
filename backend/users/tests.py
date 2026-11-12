@@ -51,6 +51,13 @@ class RegisterTests(APITestCase):
         user = User.objects.get(email='owner@example.com')
         self.assertFalse(user.is_staff)
 
+    def test_password_errors_are_attached_to_password_field(self):
+        self.data['password'] = self.data['password2'] = '12345678'
+        response = self.client.post(self.url, self.data, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('password', response.data)
+        self.assertNotIn('non_field_errors', response.data)
+
 class LoginTests(APITestCase):
     def setUp(self):
         self.login_url = reverse('login')

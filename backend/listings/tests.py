@@ -344,3 +344,102 @@ class AmenityApiTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         names = sorted(a['name'] for a in items(response))
         self.assertEqual(names, ['Wi-Fi', 'Паркінг'])
+
+class ListingSearchTests(APITestCase):
+    def setUp(self):
+        self.owner = User.objects.create_user(
+            'owner@example.com', 'Pass12345!', first_name='О', last_name='В', role='owner')
+        self.url = reverse('listing-list')
+        self.wifi = Amenity.objects.create(name='Wi-Fi')
+        self.parking = Amenity.objects.create(name='Паркінг')
+
+        self.a = make_listing(self.owner, status='published', title='Затишна квартира в центрі',
+                              city='Львів', price=8000, rooms=1, area=30)
+        self.b = make_listing(self.owner, status='published', title='Простора квартира',
+                              city='Київ', price=20000, rooms=3, area=90,
+                              property_type='apartment', district='Печерський')
+        self.c = make_listing(self.owner, status='published', title='Будинок біля лісу',
+                              city='Львів', price=15000, rooms=4, area=120,
+                              property_type='house')
+        self.hidden = make_listing(self.owner, status='draft', title='Чернетка', city='Львів')
+        self.a.amenities.add(self.wifi, self.parking)
+        self.b.amenities.add(self.wifi)
+
+    def titles(self, **params):
+        response = self.client.get(self.url, params)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        return sorted(i['title'] for i in items(response))
+
+    def test_only_published_returned(self):
+        self.assertNotIn('Чернетка', self.titles())
+
+    def test_text_search(self):
+        self.assertEqual(self.titles(search='лісу'), ['Будинок біля лісу'])
+
+    def test_search_by_city_in_text(self):
+        self.assertEqual(len(self.titles(search='Київ')), 1)
+
+    def test_filter_city(self):
+        self.assertEqual(len(self.titles(city='львів')), 2)
+
+    def test_filter_property_type(self):
+        self.assertEqual(self.titles(property_type='house'), ['Будинок біля лісу'])
+
+    def test_filter_price_range(self):
+        self.assertEqual(
+            self.titles(price_min=10000, price_max=16000), ['Будинок біля лісу'])
+
+    def test_filter_rooms_and_rooms_min(self):
+        self.assertEqual(self.titles(rooms=1), ['Затишна квартира в центрі'])
+        self.assertEqual(len(self.titles(rooms_min=3)), 2)
+
+    def test_filter_area(self):
+        self.assertEqual(len(self.titles(area_min=80)), 2)
+
+    def test_filter_amenities_requires_all(self):
+        self.assertEqual(len(self.titles(amenities=f'{self.wifi.id}')), 2)
+        self.assertEqual(
+            self.titles(amenities=f'{self.wifi.id},{self.parking.id}'),
+            ['Затишна квартира в центрі'])
+
+    def test_combined_filters(self):
+        self.assertEqual(
+            self.titles(city='Львів', price_max=10000), ['Затишна квартира в центрі'])
+
+    def test_ordering_by_price(self):
+        response = self.client.get(self.url, {'ordering': 'price'})
+        prices = [float(i['price']) for i in items(response)]
+        self.assertEqual(prices, sorted(prices))
+        response = self.client.get(self.url, {'ordering': '-price'})
+        prices = [float(i['price']) for i in items(response)]
+        self.assertEqual(prices, sorted(prices, reverse=True))
+
+    def test_invalid_number_returns_400(self):
+        response = self.client.get(self.url, {'price_min': 'abc'})
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('price_min', response.data)
+
+    def test_invalid_property_type_returns_400(self):
+        response = self.client.get(self.url, {'property_type': 'villa'})
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_price_min_greater_than_max_returns_400(self):
+        response = self.client.get(self.url, {'price_min': 20000, 'price_max': 5000})
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_invalid_amenities_returns_400(self):
+        response = self.client.get(self.url, {'amenities': 'a,b'})
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_pagination(self):
+        for i in range(12):
+            make_listing(self.owner, status='published', title=f'Додаткове {i}')
+        response = self.client.get(self.url, {'page_size': 5})
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['count'], 15)
+        self.assertEqual(len(response.data['results']), 5)
+        self.assertIsNotNone(response.data['next'])
+
+    def test_page_size_is_capped(self):
+        response = self.client.get(self.url, {'page_size': 1000})
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
