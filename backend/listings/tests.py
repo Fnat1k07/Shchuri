@@ -443,3 +443,60 @@ class ListingSearchTests(APITestCase):
     def test_page_size_is_capped(self):
         response = self.client.get(self.url, {'page_size': 1000})
         self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+class ListingDetailTests(APITestCase):
+    def setUp(self):
+        self.owner = User.objects.create_user(
+            'owner@example.com', 'Pass12345!', first_name='Іван', last_name='Петренко',
+            role='owner', phone='+380501234567')
+        self.viewer = User.objects.create_user(
+            'viewer@example.com', 'Pass12345!', first_name='Т', last_name='Н', role='tenant')
+        self.listing = make_listing(self.owner, status='published')
+        self.url = reverse('listing-detail', args=[self.listing.pk])
+
+    def test_guest_sees_name_but_not_phone(self):
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['contact']['name'], 'Іван Петренко')
+        self.assertIsNone(response.data['contact']['phone'])
+
+    def test_authenticated_user_sees_phone(self):
+        self.client.force_authenticate(self.viewer)
+        response = self.client.get(self.url)
+        self.assertEqual(response.data['contact']['phone'], '+380501234567')
+
+    def test_phone_not_in_list_response(self):
+        self.client.force_authenticate(self.viewer)
+        response = self.client.get(reverse('listing-list'))
+        self.assertNotIn('contact', items(response)[0])
+
+    def test_view_counter_increments_for_guest(self):
+        first = self.client.get(self.url)
+        second = self.client.get(self.url)
+        self.assertEqual(first.data['views_count'], 1)
+        self.assertEqual(second.data['views_count'], 2)
+        self.listing.refresh_from_db()
+        self.assertEqual(self.listing.views_count, 2)
+
+    def test_view_counter_increments_for_other_user(self):
+        self.client.force_authenticate(self.viewer)
+        self.client.get(self.url)
+        self.listing.refresh_from_db()
+        self.assertEqual(self.listing.views_count, 1)
+
+    def test_owner_views_do_not_count(self):
+        self.client.force_authenticate(self.owner)
+        self.client.get(self.url)
+        self.listing.refresh_from_db()
+        self.assertEqual(self.listing.views_count, 0)
+
+    def test_draft_views_do_not_count(self):
+        draft = make_listing(self.owner, status='draft')
+        self.client.force_authenticate(self.owner)
+        self.client.get(reverse('listing-detail', args=[draft.pk]))
+        draft.refresh_from_db()
+        self.assertEqual(draft.views_count, 0)
+
+    def test_nonexistent_listing_returns_404(self):
+        response = self.client.get(reverse('listing-detail', args=[999999]))
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
