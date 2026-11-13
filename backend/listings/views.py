@@ -1,22 +1,26 @@
 from django.db import transaction
+from django.utils import timezone
 from django.db.models import F, Q
 from django.shortcuts import get_object_or_404
-from rest_framework import permissions, status, viewsets
+from rest_framework import permissions, status, viewsets, mixins
 from rest_framework.decorators import action
 from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.response import Response
 from rest_framework.filters import OrderingFilter, SearchFilter
+from rest_framework.exceptions import ValidationError, PermissionDenied
 
 from .filters import apply_listing_filters
 from .pagination import ListingPagination
 
-from .models import Amenity, Listing, ListingImage
-from .permissions import IsOwnerOrReadOnly, IsOwnerRole
+from .models import Amenity, Listing, ListingImage, Favorite, ViewingRequest
+from .permissions import IsOwnerOrReadOnly, IsOwnerRole, IsTenantRole
 from .serializers import (
     AmenitySerializer,
+    FavoriteSerializer,
+    ListingDetailSerializer,
     ListingImageSerializer,
     ListingSerializer,
-    ListingDetailSerializer,
+    ViewingRequestSerializer,
 )
 
 MAX_IMAGES = 8
@@ -148,3 +152,123 @@ class AmenityViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = AmenitySerializer
     permission_classes = [permissions.AllowAny]
     pagination_class = None
+
+class FavoriteViewSet(
+    mixins.ListModelMixin,
+    mixins.CreateModelMixin,
+    mixins.DestroyModelMixin,
+    viewsets.GenericViewSet,
+):
+    serializer_class = FavoriteSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    pagination_class = ListingPagination
+    lookup_field = 'listing_id'
+    lookup_value_regex = r'\d+'
+
+    def get_queryset(self):
+        qs = (
+            Favorite.objects.filter(user=self.request.user)
+            .select_related('listing__owner')
+            .prefetch_related('listing__amenities', 'listing__images')
+        )
+        if self.action == 'list':
+            # оголошення, які зняли з публікації чи заархівували, не показуємо
+            qs = qs.filter(listing__status=Listing.Status.PUBLISHED)
+        return qs
+
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)
+
+class ViewingRequestViewSet(
+    mixins.CreateModelMixin,
+    mixins.ListModelMixin,
+    mixins.RetrieveModelMixin,
+    mixins.DestroyModelMixin,
+    viewsets.GenericViewSet,
+):
+    serializer_class = ViewingRequestSerializer
+    pagination_class = ListingPagination
+
+    def get_permissions(self):
+        if self.action == 'create':
+            return [permissions.IsAuthenticated(), IsTenantRole()]
+        return [permissions.IsAuthenticated()]
+
+    def get_queryset(self):
+        user = self.request.user
+        if not user.is_authenticated:
+            return ViewingRequest.objects.none()
+
+        qs = ViewingRequest.objects.select_related('listing', 'tenant')
+        if self.action == 'list':
+            qs = qs.filter(tenant=user)
+        elif self.action == 'incoming':
+            qs = qs.filter(listing__owner=user)
+        else:
+            qs = qs.filter(Q(tenant=user) | Q(listing__owner=user))
+
+        if self.action in ('list', 'incoming'):
+            status_param = self.request.query_params.get('status')
+            if status_param:
+                if status_param not in ViewingRequest.Status.values:
+                    allowed = ', '.join(ViewingRequest.Status.values)
+                    raise ValidationError({'status': [f'Допустимі значення: {allowed}.']})
+                qs = qs.filter(status=status_param)
+        return qs
+
+    def perform_create(self, serializer):
+        serializer.save(tenant=self.request.user)
+
+    @action(detail=False, methods=['get'])
+    def incoming(self, request):
+        """Заявки на оголошення поточного власника."""
+        page = self.paginate_queryset(self.get_queryset())
+        serializer = self.get_serializer(page, many=True)
+        return self.get_paginated_response(serializer.data)
+
+    def _decide(self, request, new_status):
+        obj = self.get_object()
+        if obj.listing.owner_id != request.user.id:
+            raise PermissionDenied('Розглядати заявку може лише власник оголошення.')
+        if obj.status != ViewingRequest.Status.PENDING:
+            return Response(
+                {'detail': 'Заявку вже розглянуто.'}, status=status.HTTP_400_BAD_REQUEST
+            )
+        if (new_status == ViewingRequest.Status.APPROVED
+                and obj.listing.status != Listing.Status.PUBLISHED):
+            return Response(
+                {'detail': 'Оголошення не опубліковане.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # умовне оновлення захищає від подвійного розгляду при одночасних запитах
+        updated = ViewingRequest.objects.filter(
+            pk=obj.pk, status=ViewingRequest.Status.PENDING
+        ).update(status=new_status, updated_at=timezone.now())
+        if not updated:
+            return Response(
+                {'detail': 'Заявку вже розглянуто.'}, status=status.HTTP_400_BAD_REQUEST
+            )
+        obj.refresh_from_db()
+        return Response(self.get_serializer(obj).data)
+
+    @action(detail=True, methods=['post'])
+    def approve(self, request, pk=None):
+        return self._decide(request, ViewingRequest.Status.APPROVED)
+
+    @action(detail=True, methods=['post'])
+    def reject(self, request, pk=None):
+        return self._decide(request, ViewingRequest.Status.REJECTED)
+
+    def destroy(self, request, *args, **kwargs):
+        """Орендар скасовує власну заявку, поки її не розглянули."""
+        obj = self.get_object()
+        if obj.tenant_id != request.user.id:
+            raise PermissionDenied('Скасувати заявку може лише її автор.')
+        if obj.status != ViewingRequest.Status.PENDING:
+            return Response(
+                {'detail': 'Розглянуту заявку скасувати не можна.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        obj.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)

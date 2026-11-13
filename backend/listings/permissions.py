@@ -16,3 +16,10 @@ class IsOwnerOrReadOnly(BasePermission):
         if request.method in SAFE_METHODS:
             return True
         return obj.owner_id == request.user.id
+
+class IsTenantRole(BasePermission):
+    #Заявки на перегляд подають лише орендарі.
+
+    def has_permission(self, request, view):
+        user = request.user
+        return bool(user and user.is_authenticated and user.role == 'tenant')
