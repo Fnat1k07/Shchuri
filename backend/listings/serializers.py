@@ -1,6 +1,7 @@
 from rest_framework import serializers
+from django.utils import timezone
 
-from .models import Amenity, Listing, ListingImage, Favorite
+from .models import Amenity, Listing, ListingImage, Favorite, ViewingRequest
 
 MAX_IMAGE_SIZE = 5 * 1024 * 1024
 ALLOWED_IMAGE_FORMATS = {'JPEG', 'PNG', 'WEBP'}
@@ -148,5 +149,62 @@ class FavoriteSerializer(serializers.ModelSerializer):
         if Favorite.objects.filter(user=user, listing=attrs['listing']).exists():
             raise serializers.ValidationError(
                 {'listing_id': ['Це оголошення вже в обраному.']}
+            )
+        return attrs
+
+class ListingShortSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Listing
+        fields = ('id', 'title', 'city', 'district', 'address', 'price', 'status')
+
+
+class ViewingRequestSerializer(serializers.ModelSerializer):
+    listing_id = serializers.PrimaryKeyRelatedField(
+        source='listing',
+        queryset=Listing.objects.filter(status=Listing.Status.PUBLISHED),
+        write_only=True,
+    )
+    listing = ListingShortSerializer(read_only=True)
+    tenant = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ViewingRequest
+        fields = (
+            'id', 'listing', 'listing_id', 'tenant', 'preferred_datetime',
+            'message', 'status', 'created_at', 'updated_at',
+        )
+        read_only_fields = ('id', 'status', 'created_at', 'updated_at')
+
+    def get_tenant(self, obj):
+        tenant = obj.tenant
+        return {
+            'id': tenant.id,
+            'name': f'{tenant.first_name} {tenant.last_name}'.strip(),
+            'phone': tenant.phone or None,
+        }
+
+    def validate_preferred_datetime(self, value):
+        if value is not None and value <= timezone.now():
+            raise serializers.ValidationError('Дата перегляду має бути в майбутньому.')
+        return value
+
+    def validate_message(self, value):
+        if len(value) > 1000:
+            raise serializers.ValidationError('Повідомлення не може перевищувати 1000 символів.')
+        return value
+
+    def validate(self, attrs):
+        user = self.context['request'].user
+        listing = attrs['listing']
+        if listing.owner_id == user.id:
+            raise serializers.ValidationError(
+                {'listing_id': ['Не можна подати заявку на власне оголошення.']}
+            )
+        has_pending = ViewingRequest.objects.filter(
+            tenant=user, listing=listing, status=ViewingRequest.Status.PENDING
+        ).exists()
+        if has_pending:
+            raise serializers.ValidationError(
+                {'listing_id': ['У вас уже є активна заявка на це оголошення.']}
             )
         return attrs
