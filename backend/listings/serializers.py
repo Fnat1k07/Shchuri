@@ -97,3 +97,20 @@ class ListingSerializer(serializers.ModelSerializer):
                 'Вкажіть і latitude, і longitude, або жодне з них.'
             )
         return attrs
+
+class ListingDetailSerializer(ListingSerializer):
+    contact = serializers.SerializerMethodField()
+
+    class Meta(ListingSerializer.Meta):
+        fields = ListingSerializer.Meta.fields + ('contact',)
+
+    def get_contact(self, obj):
+        request = self.context.get('request')
+        owner = obj.owner
+        contact = {
+            'name': f'{owner.first_name} {owner.last_name}'.strip(),
+            'phone': None,
+        }
+        if request and request.user.is_authenticated:
+            contact['phone'] = owner.phone or None
+        return contact

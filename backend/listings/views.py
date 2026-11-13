@@ -1,5 +1,5 @@
 from django.db import transaction
-from django.db.models import Q
+from django.db.models import F, Q
 from django.shortcuts import get_object_or_404
 from rest_framework import permissions, status, viewsets
 from rest_framework.decorators import action
@@ -16,6 +16,7 @@ from .serializers import (
     AmenitySerializer,
     ListingImageSerializer,
     ListingSerializer,
+    ListingDetailSerializer,
 )
 
 MAX_IMAGES = 8
@@ -47,6 +48,23 @@ class ListingViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         serializer.save(owner=self.request.user)
 
+    def get_serializer_class(self):
+        if self.action == 'retrieve':
+            return ListingDetailSerializer
+        return ListingSerializer
+
+    def retrieve(self, request, *args, **kwargs):
+        instance = self.get_object()
+        # рахуємо перегляд лише для опублікованих і не від самого власника
+        if (instance.status == Listing.Status.PUBLISHED
+                and instance.owner_id != request.user.id):
+            Listing.objects.filter(pk=instance.pk).update(
+                views_count=F('views_count') + 1
+            )
+            instance.refresh_from_db(fields=['views_count'])
+
+        return Response(self.get_serializer(instance).data)
+    
     @action(detail=False, methods=['get'],
             permission_classes=[permissions.IsAuthenticated])    
     def mine(self, request):
