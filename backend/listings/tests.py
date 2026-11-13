@@ -3,11 +3,13 @@ import tempfile
 from io import BytesIO
 from unittest.mock import patch
 
+from django.db import IntegrityError, transaction, connection
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import override_settings
+from django.test.utils import CaptureQueriesContext
 from PIL import Image
 
-from .models import Amenity, Listing, ListingImage
+from .models import Amenity, Listing, ListingImage, ViewingRequest, Favorite
 from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
@@ -500,3 +502,186 @@ class ListingDetailTests(APITestCase):
     def test_nonexistent_listing_returns_404(self):
         response = self.client.get(reverse('listing-detail', args=[999999]))
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+class FavoriteApiTests(APITestCase):
+    def setUp(self):
+        self.owner = User.objects.create_user(
+            'owner@example.com', 'Pass12345!', first_name='О', last_name='В', role='owner')
+        self.tenant = User.objects.create_user(
+            'tenant@example.com', 'Pass12345!', first_name='Т', last_name='Н', role='tenant')
+        self.other = User.objects.create_user(
+            'other@example.com', 'Pass12345!', first_name='І', last_name='Н', role='tenant')
+        self.listing = make_listing(self.owner, status='published', title='Опубліковане')
+        self.draft = make_listing(self.owner, status='draft', title='Чернетка')
+        self.url = reverse('favorite-list')
+
+    def detail_url(self, listing_id):
+        return reverse('favorite-detail', kwargs={'listing_id': listing_id})
+
+    def test_guest_cannot_access(self):
+        self.assertEqual(self.client.get(self.url).status_code, status.HTTP_401_UNAUTHORIZED)
+        response = self.client.post(self.url, {'listing_id': self.listing.pk}, format='json')
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_add_favorite(self):
+        self.client.force_authenticate(self.tenant)
+        response = self.client.post(self.url, {'listing_id': self.listing.pk}, format='json')
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data['listing']['id'], self.listing.pk)
+        self.assertTrue(Favorite.objects.filter(user=self.tenant, listing=self.listing).exists())
+
+    def test_cannot_add_draft(self):
+        self.client.force_authenticate(self.tenant)
+        response = self.client.post(self.url, {'listing_id': self.draft.pk}, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_cannot_add_nonexistent(self):
+        self.client.force_authenticate(self.tenant)
+        response = self.client.post(self.url, {'listing_id': 999999}, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_cannot_add_twice(self):
+        self.client.force_authenticate(self.tenant)
+        self.client.post(self.url, {'listing_id': self.listing.pk}, format='json')
+        response = self.client.post(self.url, {'listing_id': self.listing.pk}, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(Favorite.objects.filter(user=self.tenant).count(), 1)
+
+    def test_list_returns_only_own_favorites(self):
+        second = make_listing(self.owner, status='published', title='Інше')
+        Favorite.objects.create(user=self.tenant, listing=self.listing)
+        Favorite.objects.create(user=self.other, listing=second)
+        self.client.force_authenticate(self.tenant)
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        ids = [i['listing']['id'] for i in items(response)]
+        self.assertEqual(ids, [self.listing.pk])
+
+    def test_list_hides_archived_listings(self):
+        Favorite.objects.create(user=self.tenant, listing=self.listing)
+        self.listing.status = 'archived'
+        self.listing.save()
+        self.client.force_authenticate(self.tenant)
+        self.assertEqual(items(self.client.get(self.url)), [])
+
+    def test_remove_favorite(self):
+        Favorite.objects.create(user=self.tenant, listing=self.listing)
+        self.client.force_authenticate(self.tenant)
+        response = self.client.delete(self.detail_url(self.listing.pk))
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertFalse(Favorite.objects.filter(user=self.tenant).exists())
+
+    def test_cannot_remove_someone_elses_favorite(self):
+        Favorite.objects.create(user=self.other, listing=self.listing)
+        self.client.force_authenticate(self.tenant)
+        response = self.client.delete(self.detail_url(self.listing.pk))
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertTrue(Favorite.objects.filter(user=self.other).exists())
+
+    def test_remove_nonexistent_favorite(self):
+        self.client.force_authenticate(self.tenant)
+        response = self.client.delete(self.detail_url(self.listing.pk))
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+
+class FavoriteAndViewingRequestModelTests(APITestCase):
+    def setUp(self):
+        self.owner = User.objects.create_user(
+            'owner@example.com', 'Pass12345!', first_name='О', last_name='В', role='owner')
+        self.tenant = User.objects.create_user(
+            'tenant@example.com', 'Pass12345!', first_name='Т', last_name='Н', role='tenant')
+        self.listing = make_listing(self.owner, status='published')
+
+    def test_favorite_is_unique_per_user_and_listing(self):
+        Favorite.objects.create(user=self.tenant, listing=self.listing)
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            Favorite.objects.create(user=self.tenant, listing=self.listing)
+
+    def test_viewing_request_defaults(self):
+        request = ViewingRequest.objects.create(
+            listing=self.listing, tenant=self.tenant, message='Хочу переглянути')
+        self.assertEqual(request.status, 'pending')
+        self.assertIsNotNone(request.created_at)
+
+    def test_only_one_pending_request_per_tenant_and_listing(self):
+        ViewingRequest.objects.create(listing=self.listing, tenant=self.tenant)
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            ViewingRequest.objects.create(listing=self.listing, tenant=self.tenant)
+
+    def test_new_request_allowed_after_previous_was_decided(self):
+        first = ViewingRequest.objects.create(listing=self.listing, tenant=self.tenant)
+        first.status = 'rejected'
+        first.save()
+        ViewingRequest.objects.create(listing=self.listing, tenant=self.tenant)
+        self.assertEqual(ViewingRequest.objects.filter(tenant=self.tenant).count(), 2)
+
+class IsFavoriteFieldTests(APITestCase):
+    def setUp(self):
+        self.owner = User.objects.create_user(
+            'owner@example.com', 'Pass12345!', first_name='О', last_name='В', role='owner')
+        self.tenant = User.objects.create_user(
+            'tenant@example.com', 'Pass12345!', first_name='Т', last_name='Н', role='tenant')
+        self.other = User.objects.create_user(
+            'other@example.com', 'Pass12345!', first_name='І', last_name='Н', role='tenant')
+        self.fav = make_listing(self.owner, status='published', title='Обране')
+        self.plain = make_listing(self.owner, status='published', title='Звичайне')
+        Favorite.objects.create(user=self.tenant, listing=self.fav)
+        self.list_url = reverse('listing-list')
+
+    def flags(self, response):
+        return {i['title']: i['is_favorite'] for i in items(response)}
+
+    def test_guest_gets_false(self):
+        response = self.client.get(self.list_url)
+        self.assertEqual(self.flags(response), {'Обране': False, 'Звичайне': False})
+
+    def test_user_sees_own_favorites_in_list(self):
+        self.client.force_authenticate(self.tenant)
+        response = self.client.get(self.list_url)
+        self.assertEqual(self.flags(response), {'Обране': True, 'Звичайне': False})
+
+    def test_other_users_favorites_do_not_count(self):
+        self.client.force_authenticate(self.other)
+        response = self.client.get(self.list_url)
+        self.assertEqual(self.flags(response), {'Обране': False, 'Звичайне': False})
+
+    def test_detail_has_is_favorite(self):
+        self.client.force_authenticate(self.tenant)
+        yes = self.client.get(reverse('listing-detail', args=[self.fav.pk]))
+        no = self.client.get(reverse('listing-detail', args=[self.plain.pk]))
+        self.assertTrue(yes.data['is_favorite'])
+        self.assertFalse(no.data['is_favorite'])
+
+    def test_flag_updates_after_removing_favorite(self):
+        self.client.force_authenticate(self.tenant)
+        self.client.delete(reverse('favorite-detail', kwargs={'listing_id': self.fav.pk}))
+        response = self.client.get(self.list_url)
+        self.assertEqual(self.flags(response), {'Обране': False, 'Звичайне': False})
+
+    def test_flag_updates_after_adding_favorite(self):
+        self.client.force_authenticate(self.tenant)
+        self.client.post(reverse('favorite-list'), {'listing_id': self.plain.pk}, format='json')
+        response = self.client.get(self.list_url)
+        self.assertEqual(self.flags(response), {'Обране': True, 'Звичайне': True})
+
+    def test_is_favorite_cannot_be_set_by_client(self):
+        self.client.force_authenticate(self.owner)
+        payload = dict(
+            title='Нова квартира', description='Гарна', price='12000.00',
+            property_type='apartment', rooms=2, area='50.0',
+            city='Львів', district='Франківський', address='вул. Нова, 5',
+            is_favorite=True,
+        )
+        response = self.client.post(self.list_url, payload, format='json')
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertFalse(response.data['is_favorite'])
+
+    def test_favorites_are_loaded_with_a_single_query(self):
+        for i in range(5):
+            make_listing(self.owner, status='published', title=f'Ще {i}')
+        self.client.force_authenticate(self.tenant)
+        with CaptureQueriesContext(connection) as ctx:
+            response = self.client.get(self.list_url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        favorite_queries = [q for q in ctx.captured_queries if 'listings_favorite' in q['sql']]
+        self.assertEqual(len(favorite_queries), 1)

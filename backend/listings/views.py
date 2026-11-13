@@ -1,7 +1,7 @@
 from django.db import transaction
 from django.db.models import F, Q
 from django.shortcuts import get_object_or_404
-from rest_framework import permissions, status, viewsets
+from rest_framework import permissions, status, viewsets, mixins
 from rest_framework.decorators import action
 from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.response import Response
@@ -10,13 +10,14 @@ from rest_framework.filters import OrderingFilter, SearchFilter
 from .filters import apply_listing_filters
 from .pagination import ListingPagination
 
-from .models import Amenity, Listing, ListingImage
+from .models import Amenity, Listing, ListingImage, Favorite
 from .permissions import IsOwnerOrReadOnly, IsOwnerRole
 from .serializers import (
     AmenitySerializer,
     ListingImageSerializer,
     ListingSerializer,
     ListingDetailSerializer,
+    FavoriteSerializer,
 )
 
 MAX_IMAGES = 8
@@ -148,3 +149,29 @@ class AmenityViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = AmenitySerializer
     permission_classes = [permissions.AllowAny]
     pagination_class = None
+
+class FavoriteViewSet(
+    mixins.ListModelMixin,
+    mixins.CreateModelMixin,
+    mixins.DestroyModelMixin,
+    viewsets.GenericViewSet,
+):
+    serializer_class = FavoriteSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    pagination_class = ListingPagination
+    lookup_field = 'listing_id'
+    lookup_value_regex = r'\d+'
+
+    def get_queryset(self):
+        qs = (
+            Favorite.objects.filter(user=self.request.user)
+            .select_related('listing__owner')
+            .prefetch_related('listing__amenities', 'listing__images')
+        )
+        if self.action == 'list':
+            # оголошення, які зняли з публікації чи заархівували, не показуємо
+            qs = qs.filter(listing__status=Listing.Status.PUBLISHED)
+        return qs
+
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)

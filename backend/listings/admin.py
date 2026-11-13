@@ -1,6 +1,13 @@
 from django.contrib import admin
 
-from .models import Amenity, Listing, ListingImage
+from .models import Amenity, Listing, ListingImage, ViewingRequest, Favorite
+
+admin.site.register(Favorite)
+
+@admin.register(ViewingRequest)
+class ViewingRequestAdmin(admin.ModelAdmin):
+    list_display = ('id', 'listing', 'tenant', 'status', 'created_at')
+    list_filter = ('status',)
 
 
 class ListingImageInline(admin.TabularInline):

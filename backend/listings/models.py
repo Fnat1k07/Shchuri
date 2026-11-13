@@ -93,4 +93,57 @@ class ListingImage(models.Model):
     def __str__(self):
         return f'Фото {self.pk} для {self.listing_id}'
 
-# Create your models here.
+class Favorite(models.Model):
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='favorites'
+    )
+    listing = models.ForeignKey(
+        Listing, on_delete=models.CASCADE, related_name='favorited_by'
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['user', 'listing'], name='unique_favorite_per_user_listing'
+            )
+        ]
+
+    def __str__(self):
+        return f'{self.user_id} → {self.listing_id}'
+
+
+class ViewingRequest(models.Model):
+    class Status(models.TextChoices):
+        PENDING = 'pending', 'Очікує'
+        APPROVED = 'approved', 'Підтверджено'
+        REJECTED = 'rejected', 'Відхилено'
+
+    listing = models.ForeignKey(
+        Listing, on_delete=models.CASCADE, related_name='viewing_requests'
+    )
+    tenant = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='viewing_requests'
+    )
+    preferred_datetime = models.DateTimeField(null=True, blank=True)
+    message = models.TextField(blank=True)
+    status = models.CharField(
+        max_length=20, choices=Status.choices, default=Status.PENDING, db_index=True
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        constraints = [
+            # один орендар не може мати кілька активних заявок на одне оголошення
+            models.UniqueConstraint(
+                fields=['tenant', 'listing'],
+                condition=models.Q(status='pending'),
+                name='unique_pending_request_per_tenant_listing',
+            )
+        ]
+
+    def __str__(self):
+        return f'Заявка {self.pk}: {self.tenant_id} → {self.listing_id} ({self.status})'
