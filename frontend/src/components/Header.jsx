@@ -41,6 +41,16 @@ function Header() {
                 Кабінет
               </NavLink>
 
+{user.role === "owner" && (
+  <NavLink
+    to="/my-listings"
+    className={({ isActive }) =>
+      isActive ? "nav-link active" : "nav-link"
+    }
+  >
+    Мої оголошення
+  </NavLink>
+)}
               <button
                 type="button"
                 className="header-button"

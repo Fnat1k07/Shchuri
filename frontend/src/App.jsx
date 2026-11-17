@@ -8,6 +8,9 @@ import Home from "./pages/Home";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 import Profile from "./pages/Profile";
+import MyListings from "./pages/MyListings";
+
+import "./App.css";
 
 import Header from "./components/Header";
 import Footer from "./components/Footer";
@@ -36,6 +39,15 @@ function App() {
                 </ProtectedRoute>
               }
             />
+
+            <Route
+  path="/my-listings"
+  element={
+    <ProtectedRoute>
+      <MyListings />
+    </ProtectedRoute>
+  }
+/>
             <Route
   path="/listings/create"
   element={
