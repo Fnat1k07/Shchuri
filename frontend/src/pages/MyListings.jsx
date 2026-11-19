@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import api from "../api/axios";
 import { useNavigate } from "react-router-dom";
+import ListingCard from "../components/ListingCard";
 
 function MyListings() {
   const { user } = useAuth();
@@ -46,7 +47,11 @@ function MyListings() {
   }
 
   if (loading) {
-    return <div className="my-listings-page">Завантаження оголошень...</div>;
+    return (
+      <div className="my-listings-page">
+        Завантаження оголошень...
+      </div>
+    );
   }
 
   if (error) {
@@ -72,56 +77,13 @@ function MyListings() {
         <p>У вас поки немає оголошень.</p>
       ) : (
         <div className="my-listings-grid">
-          {listings.map((listing) => {
-            const coverImage = listing.images?.find(
-              (image) => image.is_cover
-            ) || listing.images?.[0];
-
-            return (
-              <div className="my-listing-card" key={listing.id}>
-                <div className="my-listing-image">
-                  {coverImage ? (
-                    <img
-                      src={coverImage.image}
-                      alt={listing.title}
-                    />
-                  ) : (
-                    <div className="no-listing-image">
-                      Немає фотографії
-                    </div>
-                  )}
-                </div>
-
-                <div className="my-listing-content">
-                  <h2>{listing.title}</h2>
-
-                  <p className="my-listing-price">
-                    {Number(listing.price).toLocaleString("uk-UA")} грн
-                  </p>
-
-                  <p>
-                    {listing.city}, {listing.address}
-                  </p>
-
-                  <p>
-                    {listing.rooms} кімн. · {listing.area} м²
-                  </p>
-
-                  <p className="my-listing-status">
-                    Статус: {listing.status}
-                  </p>
-
-                  <button
-                    onClick={() =>
-                      navigate(`/listings/${listing.id}/edit`)
-                    }
-                  >
-                    Редагувати
-                  </button>
-                </div>
-              </div>
-            );
-          })}
+          {listings.map((listing) => (
+            <ListingCard
+              key={listing.id}
+              listing={listing}
+              onEdit={(id) => navigate(`/listings/${id}/edit`)}
+            />
+          ))}
         </div>
       )}
     </div>
