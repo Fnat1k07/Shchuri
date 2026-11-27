@@ -224,3 +224,26 @@
 .listing-card-edit-button:hover {
   background: #1d4ed8;
 }
+
+/* Перехід з картки до детальної сторінки */
+
+.listing-card-clickable {
+  cursor: pointer;
+}
+
+.listing-card-clickable:focus-visible {
+  outline: 3px solid #2563eb;
+  outline-offset: 3px;
+}
+
+.listing-card {
+  position: relative;
+  cursor: pointer;
+}
+
+.listing-card-favorite {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 2;
+}

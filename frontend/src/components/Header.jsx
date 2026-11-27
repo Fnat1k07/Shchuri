@@ -42,6 +42,15 @@ function Header() {
           {user ? (
             <>
               <NavLink
+                to="/favorites"
+                className={({ isActive }) =>
+                  isActive ? "nav-link active" : "nav-link"
+                }
+              >
+                ♥ Обране
+              </NavLink>
+
+              <NavLink
                 to="/profile"
                 className={({ isActive }) =>
                   isActive ? "nav-link active" : "nav-link"
