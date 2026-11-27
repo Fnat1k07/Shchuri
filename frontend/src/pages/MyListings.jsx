@@ -79,10 +79,11 @@ function MyListings() {
         <div className="my-listings-grid">
           {listings.map((listing) => (
             <ListingCard
-              key={listing.id}
-              listing={listing}
-              onEdit={(id) => navigate(`/listings/${id}/edit`)}
-            />
+  key={listing.id}
+  listing={listing}
+  showStatus={true}
+  onEdit={(id) => navigate(`/listings/${id}/edit`)}
+/>
           ))}
         </div>
       )}
