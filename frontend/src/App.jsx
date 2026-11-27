@@ -11,6 +11,8 @@ import Login from "./pages/Login";
 import Register from "./pages/Register";
 import Profile from "./pages/Profile";
 import MyListings from "./pages/MyListings";
+import ListingDetail from "./pages/ListingDetail";
+import Favorites from "./pages/Favorites";
 
 import "./App.css";
 
@@ -28,11 +30,14 @@ function App() {
         <main className="page-content">
           <Routes>
             <Route path="/" element={<Home />} />
-
             <Route path="/search" element={<Search />} />
 
-            <Route path="/login" element={<Login />} />
+            <Route
+              path="/listings/:id"
+              element={<ListingDetail />}
+            />
 
+            <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
 
             <Route
@@ -49,6 +54,15 @@ function App() {
               element={
                 <ProtectedRoute>
                   <MyListings />
+                </ProtectedRoute>
+              }
+            />
+
+            <Route
+              path="/favorites"
+              element={
+                <ProtectedRoute>
+                  <Favorites />
                 </ProtectedRoute>
               }
             />

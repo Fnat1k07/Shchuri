@@ -1,10 +1,37 @@
-function ListingCard({ listing, onEdit, showStatus = false }) {
+
+import { useNavigate } from "react-router-dom";
+import FavoriteButton from "./FavoriteButton";
+
+function ListingCard({
+  listing,
+  onEdit,
+  showStatus = false,
+  onFavoriteChange,
+}) {
+  const navigate = useNavigate();
+
   const coverImage =
     listing.images?.find((image) => image.is_cover) ||
     listing.images?.[0];
 
+  const handleCardClick = () => {
+    navigate(`/listings/${listing.id}`);
+  };
+
+  const handleKeyDown = (event) => {
+    if (event.key === "Enter") {
+      handleCardClick();
+    }
+  };
+
   return (
-    <article className="listing-card">
+    <article
+      className="listing-card"
+      onClick={handleCardClick}
+      onKeyDown={handleKeyDown}
+      role="link"
+      tabIndex={0}
+    >
       <div className="listing-card-image">
         {coverImage ? (
           <img src={coverImage.image} alt={listing.title} />
@@ -13,6 +40,16 @@ function ListingCard({ listing, onEdit, showStatus = false }) {
             Немає фотографії
           </div>
         )}
+
+        <div
+          className="listing-card-favorite"
+          onClick={(event) => event.stopPropagation()}
+        >
+          <FavoriteButton
+            listing={listing}
+            onFavoriteChange={onFavoriteChange}
+          />
+        </div>
       </div>
 
       <div className="listing-card-content">
@@ -51,7 +88,10 @@ function ListingCard({ listing, onEdit, showStatus = false }) {
         {onEdit && (
           <button
             className="listing-card-edit-button"
-            onClick={() => onEdit(listing.id)}
+            onClick={(event) => {
+              event.stopPropagation();
+              onEdit(listing.id);
+            }}
           >
             Редагувати
           </button>
