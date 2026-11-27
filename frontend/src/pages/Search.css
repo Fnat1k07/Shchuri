@@ -1,0 +1,202 @@
+
+.search-page {
+  width: 100%;
+  min-height: 70vh;
+  color: #1e293b;
+  background: #f8fafc;
+  padding-bottom: 40px;
+}
+
+/* Заголовок сторінки пошуку */
+.search-page .home-catalog {
+  padding-top: 45px;
+}
+
+.search-page .home-section-heading {
+  text-align: left;
+  margin-bottom: 30px;
+}
+
+.search-page .home-section-heading span {
+  display: inline-block;
+  margin-bottom: 8px;
+}
+
+.search-page .home-section-heading h2 {
+  margin: 8px 0 12px;
+  font-size: clamp(26px, 3vw, 34px);
+  letter-spacing: -0.7px;
+}
+
+.search-page .home-section-heading p {
+  max-width: 650px;
+  color: #64748b;
+  line-height: 1.7;
+}
+
+/* Панель фільтрів */
+.search-page .catalog-filters {
+  padding: 30px;
+  margin-bottom: 32px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 18px;
+  box-shadow: 0 6px 24px rgba(15, 23, 42, 0.06);
+}
+
+/* Поле пошуку */
+.search-page .catalog-search {
+  gap: 14px;
+  margin-bottom: 26px;
+}
+
+.search-page .catalog-search input {
+  min-height: 48px;
+  border-radius: 10px;
+  background: #f8fafc;
+  transition: 0.2s ease;
+}
+
+.search-page .catalog-search input:focus {
+  background: #ffffff;
+}
+
+/* Поля фільтрів */
+.search-page .catalog-filter-grid {
+  gap: 20px;
+}
+
+.search-page .catalog-filter-field {
+  gap: 9px;
+}
+
+.search-page .catalog-filter-field label {
+  font-size: 13px;
+  color: #475569;
+}
+
+.search-page .catalog-filter-field input,
+.search-page .catalog-filter-field select {
+  min-height: 44px;
+  border-radius: 9px;
+  background: #f8fafc;
+  transition: 0.2s ease;
+}
+
+.search-page .catalog-filter-field input:focus,
+.search-page .catalog-filter-field select:focus {
+  background: #ffffff;
+}
+
+/* Кнопки фільтрів */
+.search-page .catalog-filter-actions {
+  margin-top: 28px;
+  padding-top: 22px;
+  border-top: 1px solid #f1f5f9;
+}
+
+.search-page .catalog-apply-button,
+.search-page .catalog-search button {
+  min-height: 44px;
+  border-radius: 10px;
+  background: #2563eb;
+  transition: 0.2s ease;
+}
+
+.search-page .catalog-apply-button:hover,
+.search-page .catalog-search button:hover {
+  background: #1d4ed8;
+  transform: translateY(-1px);
+}
+
+.search-page .catalog-reset-button {
+  min-height: 44px;
+  border-radius: 10px;
+  transition: 0.2s ease;
+}
+
+/* Панель результатів та сортування */
+.search-page .catalog-toolbar {
+  padding: 18px 22px;
+  margin-bottom: 26px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  box-shadow: 0 3px 12px rgba(15, 23, 42, 0.04);
+}
+
+.search-page .catalog-toolbar p {
+  margin: 0;
+  font-size: 14px;
+}
+
+.search-page .catalog-toolbar strong {
+  color: #2563eb;
+}
+
+.search-page .catalog-sort select {
+  min-height: 42px;
+  border-radius: 9px;
+  background: #f8fafc;
+}
+
+/* Картки оголошень */
+.search-page .catalog-listings-grid {
+  gap: 26px;
+}
+
+/* Повідомлення */
+.search-page .catalog-message {
+  padding: 55px 24px;
+  border-radius: 16px;
+  box-shadow: 0 3px 14px rgba(15, 23, 42, 0.04);
+}
+
+.search-page .catalog-error {
+  background: #fef2f2;
+}
+
+/* Пагінація */
+.search-page .catalog-pagination {
+  margin-top: 42px;
+  gap: 16px;
+}
+
+.search-page .catalog-pagination button {
+  min-width: 115px;
+  border-radius: 9px;
+  transition: 0.2s ease;
+}
+
+.search-page .catalog-pagination button:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+
+/* Адаптація */
+@media (max-width: 768px) {
+  .search-page .home-catalog {
+    padding-top: 30px;
+  }
+
+  .search-page .catalog-filters {
+    padding: 20px;
+  }
+
+  .search-page .catalog-toolbar {
+    padding: 16px;
+  }
+}
+
+@media (max-width: 600px) {
+  .search-page .home-section-heading h2 {
+    font-size: 26px;
+  }
+
+  .search-page .catalog-pagination {
+    flex-wrap: wrap;
+  }
+
+  .search-page .catalog-pagination button {
+    min-width: 105px;
+  }
+}

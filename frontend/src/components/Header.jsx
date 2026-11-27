@@ -7,10 +7,10 @@ function Header() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
 
- const handleLogout = () => {
-  logout();
-  navigate("/");
-};
+  const handleLogout = () => {
+    logout();
+    navigate("/");
+  };
 
   return (
     <header className="site-header">
@@ -30,6 +30,15 @@ function Header() {
             Головна
           </NavLink>
 
+          <NavLink
+            to="/search"
+            className={({ isActive }) =>
+              isActive ? "nav-link active" : "nav-link"
+            }
+          >
+            Знайти житло
+          </NavLink>
+
           {user ? (
             <>
               <NavLink
@@ -41,16 +50,17 @@ function Header() {
                 Кабінет
               </NavLink>
 
-{user.role === "owner" && (
-  <NavLink
-    to="/my-listings"
-    className={({ isActive }) =>
-      isActive ? "nav-link active" : "nav-link"
-    }
-  >
-    Мої оголошення
-  </NavLink>
-)}
+              {user.role === "owner" && (
+                <NavLink
+                  to="/my-listings"
+                  className={({ isActive }) =>
+                    isActive ? "nav-link active" : "nav-link"
+                  }
+                >
+                  Мої оголошення
+                </NavLink>
+              )}
+
               <button
                 type="button"
                 className="header-button"
