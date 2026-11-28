@@ -1,9 +1,8 @@
 from django.db import models
 from decimal import Decimal
-
+from django.db.models.functions import Upper
 from django.conf import settings
 from django.core.validators import MinValueValidator, MaxValueValidator
-from django.db import models
 
 class Amenity(models.Model):
     name = models.CharField(max_length=100, unique=True)
@@ -74,9 +73,20 @@ class Listing(models.Model):
 
     class Meta:
         ordering = ['-created_at']
+        indexes = [
+            # головний запит: опубліковані, найновіші першими
+            models.Index(fields=['status', '-created_at'], name='lst_status_created_idx'),
+            # сортування за ціною серед опублікованих оголошень
+            models.Index(fields=['status', 'price'], name='lst_status_price_idx'),
+            # /listings/mine/?status=... та заявки власника
+            models.Index(fields=['owner', 'status'], name='lst_owner_status_idx'),
+            # фільтр city__iexact
+            models.Index(Upper('city'), name='lst_city_upper_idx'),
+        ]
 
     def __str__(self):
         return self.title
+
 
 
 class ListingImage(models.Model):
@@ -109,6 +119,10 @@ class Favorite(models.Model):
                 fields=['user', 'listing'], name='unique_favorite_per_user_listing'
             )
         ]
+        indexes = [
+            models.Index(fields=['user', '-created_at'], name='fav_user_created_idx')
+        ]
+        
 
     def __str__(self):
         return f'{self.user_id} → {self.listing_id}'
@@ -143,6 +157,10 @@ class ViewingRequest(models.Model):
                 condition=models.Q(status='pending'),
                 name='unique_pending_request_per_tenant_listing',
             )
+        ]
+        indexes = [
+            models.Index(fields=['tenant', '-created_at'], name='vr_tenant_created_idx'),
+            models.Index(fields=['listing', 'status'], name='vr_listing_status_idx'),
         ]
 
     def __str__(self):
