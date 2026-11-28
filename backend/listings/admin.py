@@ -6,6 +6,7 @@ admin.site.register(Favorite)
 
 @admin.register(ViewingRequest)
 class ViewingRequestAdmin(admin.ModelAdmin):
+    list_select_related = ('listing', 'tenant')
     list_display = ('id', 'listing', 'tenant', 'status', 'created_at')
     list_filter = ('status',)
 
@@ -27,6 +28,7 @@ def reject_listings(modeladmin, request, queryset):
 
 @admin.register(Listing)
 class ListingAdmin(admin.ModelAdmin):
+    list_select_related = ('owner',)
     list_display = (
         'title',
         'owner',
